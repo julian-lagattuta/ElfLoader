@@ -1,4 +1,4 @@
-CFLAG = -gdwarf-2 -I$(realpath include)
+CFLAG = -gdwarf-2 -I$(realpath include) 
 
 BUILD_DIR = $(realpath .)/build
 export CFLAG

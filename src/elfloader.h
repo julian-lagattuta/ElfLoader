@@ -77,7 +77,7 @@ typedef struct Elf64{
 #define max(a,b)(a<b?b:a)
 #endif
 #define BITS 64
-#define ERROR(x...) (printf("ERROR LINE ",__LINE__,": ",x))
+#define ERROR(x...) (printf("ERROR LINE %d: %s",__LINE__,x))
 
 
 void linkElf(Elf64* e,Vector* loadedLibs,Vector* loadedDlls);
@@ -88,7 +88,7 @@ unsigned long elf_Hash(const unsigned char *name);
 uint32_t;
 size_t loadFile( char* filename,char* buffer,size_t size);
 size_t fileSize(char* filename);
-Elf64* parseElf( char* filename);
+Elf64* parseElf( char* filename,int use_run_folder);
 void loadSection(char* buffer,Elf64_Shdr* hdr,Elf64* e);
 Symbol gnuHashtableGet(Elf64* e,char* symbol);
 Symbol hashtableGet(Elf64*e, char* symbol);

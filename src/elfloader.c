@@ -1,4 +1,7 @@
 #include "elfloader.h"
+
+char* NEW_SYMBOLS[] = {"puts_abi","__libc_start_main"};
+char* REPLACE_SYMBOLS[] = {"puts","__libc_start_main"};
 char* trampolineBlock =NULL;
 void elfLoad(char* filename){
     if(!trampolineBlock){
@@ -18,7 +21,14 @@ void elfLoad(char* filename){
             continue;
             
         }
-	    Elf64* cure = parseElf(libname);
+        Elf64* cure; 
+        if(strcmp(libname,filename)==0){
+            
+            cure = parseElf(libname,0);
+        }else{
+
+            cure = parseElf(libname,1);
+        } 
 	    appendVector(&loadedLibs,cure);
 	    loadElf(cure,&loadedLibs,&global_needed_libraries);
     }
@@ -26,7 +36,8 @@ void elfLoad(char* filename){
         linkElf(loadedLibs.array[loadedLibs.length-i-1],&loadedLibs,&loadedDlls);
     }
     Elf64* e = (Elf64*)loadedLibs.array[0];
-    dumpSymbols(e,e->linkInfo.dynamic_symtab);
+    // dumpSymbols(e,e->linkInfo.dynamic_symtab);
+    printf("running...\n");
     runElf((Elf64*)loadedLibs.array[0]);
     for(int i =0;i<loadedLibs.length;i++){
         freeElf(loadedLibs.array[i]);
@@ -77,6 +88,8 @@ unsigned long elf_Hash(const unsigned char *name)
         }
         return h;
 }
+
+//taken from ld.so source code
 uint32_t
 gnu_Hash (const char *s)
 {
@@ -111,10 +124,24 @@ size_t fileSize(char* filename){
 	fclose(f);
 	return val;
 }
-Elf64* parseElf( char* filename){
-    size_t size = fileSize(filename);
-    char* buffer=  malloc(size);
-    loadFile(filename,buffer,size);
+Elf64* parseElf( char* filename, int use_run_folder){
+    size_t size;
+    char* buffer;
+    if(use_run_folder){
+        char* newfilename = malloc(128);
+        memset(newfilename,0,128);
+        strcpy(newfilename,"./run/");
+        strcat_s(newfilename,128,filename);
+        size = fileSize(newfilename);
+        buffer=  malloc(size);
+        loadFile(newfilename,buffer,size);
+
+        free(newfilename);
+    }else{
+        size = fileSize(filename);
+        buffer=  malloc(size);
+        loadFile(filename,buffer,size);
+    }
     Elf64 elf;
     memset(&elf,0,sizeof(elf));
     elf.filename = filename;
@@ -175,7 +202,6 @@ Elf64* parseElf( char* filename){
     return ret;
     
 }
-//TODO FIX LOAD SECTION BECAUSE IM LOADING IT LATER THAN ITS BEING ACCESSED WHATEVER OK?!!?
 void loadSection(char* buffer,Elf64_Shdr* hdr,Elf64* e){
     switch(hdr->sh_type){
 
@@ -255,7 +281,7 @@ Symbol hashtableGet(Elf64*e, char* symbol){
     Strtab strtab = e->linkInfo.dynamic_strtab;
     unsigned long hash = elf_Hash(symbol);
     if(h->nbucket+h->nchain+2>e->linkInfo.hashtable->sh_size/sizeof(Elf64_Word)){
-        printf("ERROR LINE: ",__LINE__,"INVALID HASH TABLE SIZE INCORRECT");
+        printf("ERROR bLINE: ",__LINE__,"INVALID HASH TABLE SIZE INCORRECT");
     }
 
     Elf64_Word i = buckets[hash%h->nbucket];
@@ -340,7 +366,53 @@ void retrieveRelSym(Elf64* e,uint64_t sh_link,Symtab* symtab,Strtab* strtab){
     }
     *strtab = makeStrtab(e,&e->section_headers[sym_link]);
 }
+Symbol symLookupDlls(char* syms, Vector* loadedDlls){
+    char* dontgen[] = {"printf_abi","__libc_start_main"};
+    char* symbol = syms;
 
+    bool is_new_symbol = false;
+    for(size_t i =0;i < sizeof_array(REPLACE_SYMBOLS);i++){
+        if(strcmp(REPLACE_SYMBOLS[i],symbol)==0){
+            symbol = NEW_SYMBOLS[i];
+            is_new_symbol = true;
+            break;
+        }
+
+    }
+    for(size_t i = 0;i<loadedDlls->length;i++){
+        byte* addr = GetProcAddress(loadedDlls->array[i],symbol);
+        if(!addr)
+            continue;
+        
+        // printf("%p",addr);
+        Symbol s ={0};
+        s.undef=false;
+        s.binding=0;
+        s.str=symbol;
+        s.type=NULL;
+        s.value = addr;
+        // bool generate = true;
+        // for(int i =0;i<sizeof_array(REPLACE_SYMBOLS);i++){
+        //     if(strcmp(REPLACE_SYMBOLS[i],symbol)==0){
+        //         s.value = addr;
+        //         generate=false;
+        //         break;
+        //     }
+        // }
+        // if(generate)
+        //     s.value=(uint64_t)generateFunction(addr,trampolineBlock,0);
+
+        
+        s.fromDll=true;
+        s.size=BITS/8;
+        return s;
+
+    }        
+    Symbol s= {0};
+    s.undef = true;
+    return s;
+    // printf("couldn't find symbol in dll %s\n",symbol);
+}
 Symbol symLookup(Elf64* e,char* symbol,Vector* libs,int type_class,Vector* loadedDlls){
     Symbol sym={0};
     sym.undef=true;
@@ -396,35 +468,16 @@ Symbol symLookup(Elf64* e,char* symbol,Vector* libs,int type_class,Vector* loade
     //if no symbol found
     if(sym.undef){
         //search dlls for symbol
-        for(size_t i = 0;i<loadedDlls->length;i++){
-            byte* addr = GetProcAddress(loadedDlls->array[i],symbol);
-            if(!addr)
-                continue;
-            
-            Symbol s ={0};
-            s.undef=false;
-            s.binding=0;
-            s.str=symbol;
-            s.type=NULL;
-            if(strcmp("__libc_start_main",symbol)==0){
-                s.value = addr;
-            }else{
-                s.value=(uint64_t)generateFunction(addr,trampolineBlock,0);
-
-            }
-            s.fromDll=true;
-            s.size=BITS/8;
-            return s;
-
-        }
+        return symLookupDlls(symbol,loadedDlls);
     }
         
 
     return sym;
 
 }
+
 Symbol makeSymbol(Elf64_Sym sym,char* str,Elf64* e){
-    Symbol s;
+    Symbol s={0};
     s.str =str;
     s.undef=false;
     s.sym = sym;
@@ -486,8 +539,10 @@ void performRelocation(Elf64* e,Elf64_Addr r_offset,uint64_t r_info, int64_t r_a
         || type_class & (rsym.st_shndx == SHN_UNDEF) ||type_class&ELF_RTYPE_CLASS_COPY)
         sym = symLookup(e,symstr,loadedLibs,elf_machine_type_class(ELF64_R_TYPE(r_info)),loadedDlls);
 
-    size_t s=0x69696;
-    byte* b = 0x420420;
+    size_t s=0x610101;
+    byte* b =0x101010110;
+
+    // printf("%s\n",sym.str);
     if(sym.undef){
 		printf("undefined symbol, relocation failed: %s\n",symstr);
     }
@@ -511,7 +566,7 @@ void performRelocation(Elf64* e,Elf64_Addr r_offset,uint64_t r_info, int64_t r_a
     size_t z = sym.size;
     #define reloc(value,size) (*(uint##size##_t*) reloc_addr= (uint##size##_t)value)
 
-    //https://www.intezer.com/blog/malware-analysis/executable-and-linkable-format-101-part-3-relocations/
+    //most of this is explained here: https://www.intezer.com/blog/malware-analysis/executable-and-linkable-format-101-part-3-relocations/
     switch(ELF64_R_TYPE(r_info)){
         case R_X86_64_64:
             reloc(s+a,64);
@@ -567,7 +622,7 @@ void performRelocation(Elf64* e,Elf64_Addr r_offset,uint64_t r_info, int64_t r_a
 			reloc(v,64);
 			break;
 		default:
-			printf("UNKNOWNN RELOCATION");
+			printf("UNKNOWN RELOCATION: %d for symbol \"%s\"\n",ELF64_R_TYPE(r_info),sym.str);
     }
     return;
 }

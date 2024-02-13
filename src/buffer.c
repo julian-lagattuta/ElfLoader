@@ -12,7 +12,7 @@ return VirtualAlloc(NULL,size,MEM_COMMIT |MEM_RESERVE,PAGE_EXECUTE_READWRITE );
 #endif
 #ifdef __unix__
 
-	return mmap(NULL,size,PROT_EXEC|PROT_READ|PROT_WRITE,MAP_ANONYMOUS|MAP_SHARED,-1,0);
+    printf("UNIX NOT SUPPORTED");
 #endif
 }
 void largeFree(void* p,size_t size){
@@ -23,9 +23,7 @@ void largeFree(void* p,size_t size){
 #endif
 
 #ifdef __unix__
-	if(!munmap(p,size)){
-		printf("ERROR FREEING!");
-	}
+    printf("UNIX NOT SUPPORTED");
 #endif
 }
     

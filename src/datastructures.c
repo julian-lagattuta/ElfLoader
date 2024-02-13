@@ -138,7 +138,8 @@ void setHashtable(Hashtable* h,char* key,void* value){
         for(size_t i = 0;i<sizeof_array(arr);i++)
             arr[i][mhash] = initVectorSize(2);
         h->_filled_buckets++;   
-    }
+    }   
+    
     
     appendVector(&h->hash_table[mhash],hash);
     appendVector(&h->value_table[mhash],hash);

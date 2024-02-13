@@ -6,6 +6,7 @@
         "stdint.h": "c",
         "datastructures.h": "c",
         "stdio.h": "c",
-        "trampoline.h": "c"
+        "trampoline.h": "c",
+        "corecrt_stdio_config.h": "c"
     }
 }
