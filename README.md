@@ -12,7 +12,7 @@ You can test out my example elf files which are already placed in the run folder
 Run `./build/main.exe ./run/a.out` in the ElfLoader directory.
 # How to run as compatability layer for your own program
 First, ensure your program does not include any TLS.
-Place all appropriate .so files and elf files in run folder except `glibc.so` (and its variants).  
+Place all appropriate .so files and elf files in run folder except `libc.so.6`.  
 For all functions which are part of glibc and used in your Linux program, rewrite that function for Windows in `dlls/wrappers.c`, adding an `_abi` at the end of its name, much like what I did with `puts` in `wrappers.c`. 
 In `src/elfloader.c`, add the name `[function name]_abi` to NEW_SYMBOLS and `[function name]` to REPLACE_SYMBOLS, ensuring that both share the same index. 
 ### Now run!
